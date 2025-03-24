@@ -2,34 +2,37 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "niranjan1614/devops"          // Replace with your Docker Hub username and image name
+        IMAGE_NAME = "niranjan1614/devops"  // Replace with your Docker Hub username and image name
         TAG = "latest"
         CONTAINER_NAME = "my-container"
         PORT = "3006"
     }
 
     stages {
-        
+
         stage('Clone Repository') {
             steps {
                 echo "Cloning GitHub repository..."
-                git branch:'main', url:'https://github.com/NiranjanG2004/calculator_for_devopsproject.git'  // Replace with your repo URL
+                git branch: 'main', url: 'https://github.com/NiranjanG2004/calculator_for_devopsproject.git'  // Replace with your repo URL
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo "Building Docker image..."
-                sh 'chmod +x build.sh'
-                sh './build.sh'
+                sh '''
+                    docker build -t $IMAGE_NAME:$TAG .
+                '''
             }
         }
 
         stage('Login to Docker Hub') {
             steps {
                 echo "Logging into Docker Hub..."
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
+                withCredentials([usernamePassword(credentialsId: 'aca910be-02cb-4176-967c-ead95905b076', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        docker login -u $DOCKER_USER -p $DOCKER_PASS
+                    '''
                 }
             }
         }
@@ -37,16 +40,21 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 echo "Pushing Docker image to Docker Hub..."
-                sh "docker tag $IMAGE_NAME:$TAG $IMAGE_NAME:$TAG"
-                sh "docker push $IMAGE_NAME:$TAG"
+                sh '''
+                    docker tag $IMAGE_NAME:$TAG $IMAGE_NAME:$TAG
+                    docker push $IMAGE_NAME:$TAG
+                '''
             }
         }
 
         stage('Deploy Docker Container') {
             steps {
                 echo "Deploying Docker container..."
-                sh 'chmod +x deploy.sh'
-                sh './deploy.sh'
+                sh '''
+                    docker stop $CONTAINER_NAME || true
+                    docker rm $CONTAINER_NAME || true
+                    docker run -d --name $CONTAINER_NAME -p $PORT:3000 $IMAGE_NAME:$TAG
+                '''
             }
         }
     }
