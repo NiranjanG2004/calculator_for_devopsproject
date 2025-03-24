@@ -1,72 +1,62 @@
-pipeline{
+pipeline {
     agent any
-    tools{
-        jdk 'jdk17'
-        nodejs 'node16'
-    }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        IMAGE_NAME = "niranjan1614/devops"          // Replace with your Docker Hub username and image name
+        TAG = "latest"
+        CONTAINER_NAME = "my-container"
+        PORT = "3006"
     }
+
     stages {
-        stage('clean workspace'){
-            steps{
-                cleanWs()
-            }
-        }
-        stage('Checkout from Git'){
-            steps{
-                git branch: 'main', url: 'https://github.com/akaspatranobis/hotstar-clone-app-ci-cd-k8.git'
-            }
-        }
-        stage("Sonarqube Analysis "){
-            steps{
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Hotstar \
-                    -Dsonar.projectKey=Hotstar'''
-                }
-            }
-        }
-        stage("quality gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
-                }
-            }
-        }
-        stage('Install Dependencies') {
+        
+        stage('Clone Repository') {
             steps {
-                sh "npm install"
+                echo "Cloning GitHub repository..."
+                git branch:'main', url:'https://github.com/NiranjanG2004/calculator_for_devopsproject.git'  // Replace with your repo URL
             }
         }
-        
-        stage('TRIVY FS SCAN') {
+
+        stage('Build Docker Image') {
             steps {
-                sh "trivy fs . > trivyfs.txt"
+                echo "Building Docker image..."
+                sh 'chmod +x build.sh'
+                sh './build.sh'
             }
         }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh "docker build -t hotstar ."
-                       sh "docker tag hotstar apatranobis59/hotstar:latest "
-                       sh "docker push apatranobis59/hotstar:latest"
-                    }
+
+        stage('Login to Docker Hub') {
+            steps {
+                echo "Logging into Docker Hub..."
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
                 }
             }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image apatranobis59/hotstar:latest > trivyimage.txt" 
+
+        stage('Push Docker Image') {
+            steps {
+                echo "Pushing Docker image to Docker Hub..."
+                sh "docker tag $IMAGE_NAME:$TAG $IMAGE_NAME:$TAG"
+                sh "docker push $IMAGE_NAME:$TAG"
             }
         }
-		
-		stage("deploy_docker"){
-				steps{
-					sh "docker run -d --name hotstar -p 3001:3000 apatranobis59/hotstar:latest"
-				}
-		}
-        
-        
+
+        stage('Deploy Docker Container') {
+            steps {
+                echo "Deploying Docker container..."
+                sh 'chmod +x deploy.sh'
+                sh './deploy.sh'
+            }
+        }
     }
-} 
+
+    post {
+        success {
+            echo "Deployment Successful!"
+        }
+        failure {
+            echo "Deployment Failed!"
+        }
+    }
+}
